@@ -1,12 +1,12 @@
-import { useState } from 'react'
-import {
-  types,
-  version,
-  Device,
-  detectDevice,
-  parseScalabilityMode,
-  debug
-} from "mediasoup-client";
+// import { useState } from 'react'
+// import {
+//   types,
+//   version,
+//   Device,
+//   detectDevice,
+//   parseScalabilityMode,
+//   debug
+// } from "mediasoup-client";
 
 
 function App() {
