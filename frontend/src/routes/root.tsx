@@ -1,4 +1,11 @@
 import { Link, Outlet, useLoaderData } from "react-router-dom";
+import {
+  RecoilRoot,
+  atom,
+  selector,
+  useRecoilState,
+  useRecoilValue,
+} from 'recoil';
 import { getContacts } from "../contacts";
 
 export async function loader() {
@@ -9,7 +16,7 @@ export async function loader() {
 export default function Root() {
     const { contacts }: any = useLoaderData();
     return (
-      <>
+      <RecoilRoot>
         <div id="sidebar">
           <h1>React Router Contacts</h1>
           <div>
@@ -38,7 +45,7 @@ export default function Root() {
           <nav>
             {contacts.length ? (
               <ul>
-                {contacts.map((contact) => (
+                {contacts.map((contact: any) => (
                   <li key={contact.id}>
                     <Link to={`contacts/${contact.id}`}>
                       {contact.first || contact.last ? (
@@ -63,7 +70,7 @@ export default function Root() {
         <div id="detail">
           <Outlet />
         </div>
-      </>
+      </RecoilRoot>
     );
   }
   
