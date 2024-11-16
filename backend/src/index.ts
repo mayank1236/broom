@@ -1,17 +1,16 @@
-import { WebSocketServer } from "ws";
+import express from "express";
+import loaders from "./loaders";
+import config from "./config";
 
-const wss = new WebSocketServer({ port: 8080 });
+async function startServer() {
 
-// let senderSocket: null | WebSocket = null;
-// let receiverSocket: null | WebSocket = null;
+  const app = express();
 
-wss.on('connection', function connection(ws) {
-    // ws.on('error', console.error);
+  await loaders({ expressApp: app });
 
-    ws.on('message', function message(data: any) {
-        const message = JSON.parse(data);
-        console.log(message)
-    });
+  app.listen(config.port, () => {
+    console.log(`Your server is ready on ${config.port} !`);
+  });
+}
 
-    // ws.send('something');
-});
+startServer();

@@ -1,11 +1,15 @@
-version: '3.4'
+version: '0'
 
 services:
   backend:
-    build: ./packages/backend
+    build: ./backend
+    environment:
+      NODE_ENV: production
     ports:
       - "5000:5000"
   frontend:
-    build: ./packages/frontend
+    build: ./frontend
+    environment:
+      NODE_ENV: production
     ports:
       - "3000:3000"

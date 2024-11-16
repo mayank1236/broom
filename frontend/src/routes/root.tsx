@@ -6,46 +6,31 @@ import {
   useRecoilState,
   useRecoilValue,
 } from 'recoil';
-import { getContacts } from "../contacts";
 
-export async function loader() {
-  const contacts = await getContacts();
-  return { contacts };
-}
+import WebSocket from "ws";
 
 export default function Root() {
-    const { contacts }: any = useLoaderData();
+    const socket = new WebSocket('wss://localhost:5176/ws');
+
+    // Set up event listeners for incoming messages
+    socket.onmessage = (event) => {
+      console.log(`Received message from server: ${event.data}`);
+      // Process the message and update the UI if needed
+    };
+
+    // Set up event listeners for disconnections
+    socket.onclose = () => {
+      console.log('Disconnected from server');
+    };
+
+    // Set up event listeners for errors
+    socket.onerror = (error) => {
+      console.error(`Error occurred: ${error}`);
+    };
+
     return (
       <RecoilRoot>
-        <div id="sidebar">
-          <h1 className="text-3xl font-bold underline">
-            Hello world!
-          </h1>
-          <nav>
-            {contacts.length ? (
-              <ul>
-                {contacts.map((contact: any) => (
-                  <li key={contact.id}>
-                    <Link to={`contacts/${contact.id}`}>
-                      {contact.first || contact.last ? (
-                        <>
-                          {contact.first} {contact.last}
-                        </>
-                      ) : (
-                        <i>No Name</i>
-                      )}{" "}
-                      {contact.favorite && <span>★</span>}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>
-                <i>No contacts</i>
-              </p>
-            )}
-          </nav>
-        </div>
+        
         <div id="detail">
           <Outlet />
         </div>
