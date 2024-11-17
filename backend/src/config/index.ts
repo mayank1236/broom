@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export default {
-  port: process.env.PORT || "5000",
+  port: process.env.PORT || "5001",
   databaseURL: process.env.DATABASE_URI || "",
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || "",

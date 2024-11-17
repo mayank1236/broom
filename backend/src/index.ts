@@ -1,14 +1,16 @@
 import express from "express";
+import { createServer } from "http";
+
 import loaders from "./loaders";
 import config from "./config";
 
 async function startServer() {
-
   const app = express();
+  const server = createServer(app);
 
-  await loaders({ expressApp: app });
+  await loaders({ expressApp: app, httpServer: server });
 
-  app.listen(config.port, () => {
+  server.listen(config.port, () => {
     console.log(`Your server is ready on ${config.port} !`);
   });
 }
