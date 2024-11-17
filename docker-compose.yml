@@ -1,15 +1,29 @@
 version: '0'
 
 services:
-  backend:
+  broom_mongo:
+    image: mongo
+    container_name: broom_mongo
+    env_file: ./backend/.env
+    ports:
+      - "27017:27017"
+    volumes:
+      - broom_database:/data/db
+  
+  broom_backend:
     build: ./backend
-    environment:
-      NODE_ENV: production
+    container_name: broom_backend
+    depends_on:
+      - broom_mongo
+    env_file: ./backend/.env
     ports:
-      - "5000:5000"
-  frontend:
-    build: ./frontend
-    environment:
-      NODE_ENV: production
-    ports:
-      - "3000:3000"
+      - "5001:5001"
+
+  # broom_frontend:
+  #   build: ./frontend
+  #   env_file: ./frontend/.env
+  #   ports:
+  #     - "3001:3001"
+  
+volumes:
+  broom_database:

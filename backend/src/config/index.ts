@@ -8,5 +8,6 @@ export default {
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || "",
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+    callback: `http://localhost:${process.env.port}/auth/google/callback`
   },
 }

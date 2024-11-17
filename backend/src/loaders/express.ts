@@ -9,6 +9,7 @@ export default async ({ app }: { app: express.Application }) => {
   app.enable('trust proxy');
 
   app.use(cors());
+  app.use(express.json());
   // app.use(require('morgan')('dev'));
   app.use(bodyParser.urlencoded({ extended: false }));
 

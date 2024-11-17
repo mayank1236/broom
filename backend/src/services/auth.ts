@@ -1,23 +1,27 @@
-// import passport from "passport";
-// import OAuth2Strategy from "passport-oauth2";
-// import config from "../config";
+import passport from "passport";
+import {Strategy as GoogleStrategy} from "passport-google-oauth20";
+import config from "../config";
+import { IUserInputDTO } from "@/interfaces/IUser";
 
-// export default class AuthService {
+export default class AuthService {
 
-//   constructor() {
-//     passport.use(new OAuth2Strategy({
-//         authorizationURL: 'https://www.example.com/oauth2/authorize',
-//         tokenURL: 'https://www.example.com/oauth2/token',
-//         clientID: config.google.clientId,
-//         clientSecret: config.google.clientSecret,
-//         callbackURL: "http://localhost:3000/auth/example/callback"
-//       },
-//       function(accessToken, refreshToken, profile, cb) {
-//         // User.findOrCreate({ exampleId: profile.id }, function (err, user) {
-//         //   return cb(err, user);
-//         // });
-//       }
-//     ));
-//   }
+  constructor(
+    private userModel: Models.UserModel,
+  ) {
+  }
+
+  public async Signin(userInputDTO: IUserInputDTO) {
+    passport.use(new GoogleStrategy({
+        clientID: config.google.clientId,
+        clientSecret: config.google.clientSecret,
+        callbackURL: config.google.callback
+      },
+      function(accessToken, refreshToken, profile, cb) {
+        // User.findOrCreate({ googleId: profile.id }, function (err, user) {
+        //     return cb(err, user);
+        // });
+      }
+    ));
+  }
   
-// }
+}
