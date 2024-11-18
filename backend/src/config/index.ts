@@ -1,13 +1,22 @@
 import dotenv from "dotenv";
-// config() will read your .env file, parse the contents, assign it to process.env.
-dotenv.config();
+
+
+const envFound = dotenv.config();
+
+if(envFound.error) {
+  throw new Error("⚠️  Couldn't find .env file  ⚠️");
+}
+
+process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 
 export default {
   port: process.env.PORT || "5001",
   databaseURL: process.env.DATABASE_URI || "",
-  google: {
+  googleAuth: {
     clientId: process.env.GOOGLE_CLIENT_ID || "",
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    callback: `http://localhost:${process.env.port}/auth/google/callback`
   },
+  api: {
+    prefix: '/api/v1'
+  }
 }
