@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon --watch src --ext ts --exec \"tsc && node dist\"",
+    "dev": "DEBUG=mediasoup:* nodemon --watch src --ext ts --exec \"tsc && node dist\"",
     "build": "npx tsc -p ."
   },
   "keywords": [],
@@ -19,6 +19,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "express-session": "^1.18.1",
+    "mediasoup": "^3.15.1",
     "mongoose": "^8.8.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
