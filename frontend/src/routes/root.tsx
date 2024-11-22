@@ -1,40 +1,62 @@
 import { Link, Outlet, useLoaderData } from "react-router-dom";
-import {
-  RecoilRoot,
-  atom,
-  selector,
-  useRecoilState,
-  useRecoilValue,
-} from 'recoil';
-
-import WebSocket from "ws";
+// import WebSocket from "ws";
 
 export default function Root() {
-    const socket = new WebSocket('wss://localhost:5176/ws');
 
-    // Set up event listeners for incoming messages
+  const connect = () => {
+    const socket = new WebSocket('ws://localhost:5001/ws');
+
+    socket.onopen = () => {
+      // start our socket request
+      const msg = {
+        type: "getRouterRtpCapabilities"
+      };
+
+      const resp = JSON.stringify(msg);
+      socket.send(resp)
+
+    }
+
     socket.onmessage = (event) => {
-      console.log(`Received message from server: ${event.data}`);
-      // Process the message and update the UI if needed
-    };
+      const msg = event.data;
 
-    // Set up event listeners for disconnections
-    socket.onclose = () => {
-      console.log('Disconnected from server');
-    };
+      const jsonValidation = IsJsonString(msg);
+      if (!jsonValidation) {
+          console.error("json error");
+          return
+      }
 
-    // Set up event listeners for errors
-    socket.onerror = (error) => {
-      console.error(`Error occurred: ${error}`);
-    };
+      let resp = JSON.parse(msg);
 
-    return (
-      <RecoilRoot>
-        
-        <div id="detail">
-          <Outlet />
-        </div>
-      </RecoilRoot>
-    );
+      switch (resp.type) {
+        case "routerCapabilities":
+          console.log(resp)
+          break;
+      
+        default:
+          break;
+      }
+    }
+
+    const IsJsonString = (str: string) => {
+      try {
+          JSON.parse(str);
+      } catch (error) {
+          return false;
+      }
+      return true;
+  }
+  }
+
+  connect();
+
+  return (
+    <>
+
+      <div id="detail">
+        <Outlet />
+      </div>
+    </>
+  );
   }
   

@@ -23,6 +23,10 @@ const createWorker = async () => {
             process.exit(1);
         }, 2000);
     });
+
+    const mediaCodecs = msConfig.mediasoup.router.mediaCodes;
+    const mediasoupRouter = await worker.createRouter({mediaCodecs});
+    return mediasoupRouter;
 }
 
 export { createWorker };
