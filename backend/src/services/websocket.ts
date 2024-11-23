@@ -1,10 +1,20 @@
 import { WebSocket, WebSocketServer } from 'ws';
-import { createWorker } from "@/services/mediasoup";
-import { Router } from 'mediasoup/node/lib/types';
+import {createWebRtcTransport, createWorker} from "@/services/mediasoup";
+import {
+    DtlsParameters,
+    MediaKind,
+    Producer,
+    Router,
+    RtpParameters,
+    Transport
+} from 'mediasoup/node/lib/types';
 
-let mediasoupRouter: Router;
 
 const WebsocketConnection = async (wss: WebSocketServer) => {
+    let mediasoupRouter: Router;
+    let producerTransport: Transport;
+    let producer: Producer;
+
     try {
         mediasoupRouter = await createWorker();
     } catch (error) {
@@ -27,6 +37,15 @@ const WebsocketConnection = async (wss: WebSocketServer) => {
                 case 'getRouterRtpCapabilities':
                     onRouterRtpCapabilities(event, ws);
                     break;
+                case 'createProducerTransport':
+                    onCreateProducerTransport(event, ws);
+                    break;
+                case 'connectProducerTransport':
+                    onConnectProducerTransport(event, ws);
+                    break;
+                case 'produce':
+                    onProduce(event, ws, wss);
+                    break;
                 default:
                     break;
             }
@@ -34,7 +53,37 @@ const WebsocketConnection = async (wss: WebSocketServer) => {
     });
 
     const onRouterRtpCapabilities = (event: string, ws: WebSocket) => {
-        send(ws, "routerCapabilities", mediasoupRouter.rtpCapabilities)
+        send(ws, "routerCapabilities", mediasoupRouter.rtpCapabilities);
+    }
+
+    const onCreateProducerTransport = async (event: string, ws: WebSocket) => {
+        try{
+            const { transport, params } = await createWebRtcTransport(mediasoupRouter);
+            producerTransport = transport;
+            send(ws, "producerTransportCreated", params);
+        } catch (e) {
+            console.error(e);
+            send(ws, "error", e);
+        }
+    }
+
+    const onConnectProducerTransport = async (event: { type: string; dtlsParameters: DtlsParameters }, ws: WebSocket) => {
+        await producerTransport.connect({dtlsParameters: event.dtlsParameters});
+        send(ws, "producerConnected", 'producer connected');
+    }
+
+    const onProduce = async (
+        event: { type: string; transportId: string; kind: MediaKind; rtpParameters: RtpParameters },
+        ws: WebSocket,
+        webSocket: WebSocketServer
+    ) => {
+        const { kind, rtpParameters } = event;
+        producer = await producerTransport.produce({kind, rtpParameters});
+        const resp = {
+            id: producer.id
+        };
+        send(ws, "produced", resp);
+        broadcast(webSocket, "newProducer", "new user");
     }
 
     const IsJsonString = (str: string) => {
@@ -54,6 +103,18 @@ const WebsocketConnection = async (wss: WebSocketServer) => {
 
         const resp = JSON.stringify(message);
         ws.send(resp);
+    }
+
+    const broadcast = (ws: WebSocketServer, type: string, msg: any) => {
+        const message = {
+            type,
+            data: msg
+        }
+        const resp = JSON.stringify(message);
+
+        ws.clients.forEach(client => {
+            client.send(resp);
+        });
     }
 }
 

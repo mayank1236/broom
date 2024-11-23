@@ -45,7 +45,9 @@ export const msConfig = {
                     ip: '0.0.0.0',
                     announcedIp: '127.0.0.1' //replace by public IP address
                 }
-            ] as TransportListenIp[]
+            ] as TransportListenIp[],
+            maxIncomeBitrate: 150000,
+            initialAvailableOutgoingBitrate: 100000,
         },
     }
 } as const;

@@ -29,4 +29,39 @@ const createWorker = async () => {
     return mediasoupRouter;
 }
 
-export { createWorker };
+const createWebRtcTransport = async (mediasoupRouter: Router) => {
+    const {
+        maxIncomeBitrate,
+        initialAvailableOutgoingBitrate,
+        listenIps
+    } = msConfig.mediasoup.webRtcTransport;
+
+    const transport = await mediasoupRouter.createWebRtcTransport({
+        listenIps,
+        enableUdp: true,
+        enableTcp: true,
+        preferUdp: true,
+        initialAvailableOutgoingBitrate,
+    });
+
+    if(maxIncomeBitrate) {
+        try{
+            await transport.setMaxIncomingBitrate(maxIncomeBitrate);
+        } catch(e) {
+            console.error(e);
+        }
+    }
+
+    return {
+        transport,
+        params: {
+            id: transport.id,
+            iceParameters: transport.iceParameters,
+            iceCandidates: transport.iceCandidates,
+            dtlsParameters: transport.dtlsParameters,
+        }
+    }
+};
+
+
+export { createWorker, createWebRtcTransport };
