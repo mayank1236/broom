@@ -6,21 +6,24 @@ import {RtpCapabilities} from "mediasoup-client/lib/types";
 // import WebSocket from "ws";
 
 export default function Root() {
+    let socket: WebSocket;
     let isWebcam: boolean;
     let textPublish;
-    let textWebcam;
-    let textScreen;
     let device: mediasoup.types.Device;
     let producer;
     let stream;
+    let transport;
 
+    const textWebcam = useRef(null);;
+    const textScreen = useRef(null);
     const btnWebcam = useRef(null);
     const btnScreen = useRef(null);
     const localVideo = useRef(null);
+    const remoteVideo = useRef(null);
 
     const connect = () => {
 
-        const socket = new WebSocket('ws://localhost:5001/ws');
+        socket = new WebSocket('ws://localhost:5001/ws');
 
         btnScreen.current?.addEventListener('click', (e) => publish(e));
         btnWebcam.current?.addEventListener('click', (e) => publish(e));
@@ -45,7 +48,7 @@ export default function Root() {
                 return
             }
 
-            const resp: {type: string, data: RtpCapabilities} = JSON.parse(msg);
+            const resp: {type: string, data: any} = JSON.parse(msg);
 
             switch (resp.type) {
                 case "routerCapabilities":
@@ -63,6 +66,10 @@ export default function Root() {
             }
         }
 
+        // socket.onclose = () => {
+        //     console.error('websocket closed');
+        //     transport?.close();
+        // }
 
     }
 
@@ -79,7 +86,7 @@ export default function Root() {
     }
 
     const onProducerTransportCreated = async (resp: any) => {
-        const transport = device.createSendTransport(resp);
+        transport = device.createSendTransport(resp);
 
         transport.on('connect', async ({dtlsParameters}, callback, errback) => {
             const message = {
@@ -88,8 +95,21 @@ export default function Root() {
             };
             const resp = JSON.stringify(message);
             socket.send(resp);
-            socket.addEventListener('producerConnected', (event) => {
-                callback();
+
+            socket.addEventListener('message', (event) => {
+                const msg = event.data;
+
+                const jsonValidation = IsJsonString(msg);
+                if (!jsonValidation) {
+                    console.error("json error");
+                    return
+                }
+
+                const resp: {type: string, data: any} = JSON.parse(msg);
+                if(resp.type === "producerConnected") {
+                    console.log(resp.data);
+                    callback();
+                }
             });
         });
         // Begin Transport Producer
@@ -103,7 +123,17 @@ export default function Root() {
 
             const resp = JSON.stringify(message);
             socket.send(resp);
-            socket.addEventListener('published', (resp) => {
+            socket.addEventListener('published', (event) => {
+                const msg = event.data;
+
+                const jsonValidation = IsJsonString(msg);
+                if (!jsonValidation) {
+                    console.error("json error");
+                    return
+                }
+
+                const resp: {type: string, data: any} = JSON.parse(msg);
+                console.log('published', resp);
                 callback(resp.data.id);
             })
         });
@@ -130,10 +160,10 @@ export default function Root() {
 
         try {
             stream = await getUserMedia(transport, isWebcam);
-            const track = stream.getVideoTracks()[0];
+            const track = stream?.getVideoTracks()[0];
             const params = { track};
 
-            producer = await transport.producer(params)
+            producer = await transport.produce(params)
         } catch (e) {
             console.error(e);
             textPublish.innerHTML = 'failed!';
@@ -141,8 +171,8 @@ export default function Root() {
     }
 
     const publish = (e) => {
-        isWebcam = (e.target.id == "btnWebcam");
-        textPublish = isWebcam ? textWebcam : textScreen;
+        isWebcam = (e.target.id == "btn_webcam");
+        textPublish = isWebcam ? textWebcam.current : textScreen.current;
         if(btnWebcam.current && btnScreen.current) {
             btnWebcam.current.disabled = true;
             btnScreen.current.disabled = true;
@@ -151,7 +181,7 @@ export default function Root() {
         const message = {
             type: 'createProducerTransport',
             forceTcp: false,
-            rtpCapabilities: device.rtpCapabilities,
+            rtpCapabilities: device?.rtpCapabilities,
         };
 
         const resp = JSON.stringify(message);
@@ -197,9 +227,10 @@ export default function Root() {
     return (
         <>
             <main className="main">
-                <video ref={localVideo} controls={false}>
-                    <source/>
-                </video>
+                <div className="flex justify-around p-10 gap-x-4 ">
+                    <video className="w-full" ref={localVideo} autoPlay controls></video>
+                    <video className="w-full" ref={remoteVideo} autoPlay controls></video>
+                </div>
                 <button
                   disabled
                   className="btn_webcam p-3 bg-black text-white border border-black hover:text-black hover:bg-white disabled:bg-gray-400 disabled:border-gray-400 disabled:text-white"
@@ -212,6 +243,8 @@ export default function Root() {
                   id="btn_screen"
                   ref={btnScreen}
                 >Screen</button>
+                <p ref={textScreen}></p>
+                <p ref={textWebcam}></p>
             </main>
             <div id="detail">
                 <Outlet />
