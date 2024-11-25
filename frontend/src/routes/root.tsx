@@ -2,31 +2,30 @@
 import { Outlet } from "react-router-dom";
 import * as mediasoup from 'mediasoup-client';
 import {useEffect, useRef} from "react";
-import {RtpCapabilities} from "mediasoup-client/lib/types";
+import {AppData, Producer, RtpCapabilities, Transport, TransportOptions} from "mediasoup-client/lib/types";
 // import WebSocket from "ws";
 
 export default function Root() {
-    let socket: WebSocket;
     let isWebcam: boolean;
-    let textPublish;
+    let textPublish: HTMLParagraphElement | null;
     let device: mediasoup.types.Device;
-    let producer;
-    let stream;
-    let transport;
+    let producer: Producer | undefined;
+    let stream:  MediaStream | undefined;
+    let transport: Transport | undefined;
 
-    const textWebcam = useRef(null);;
-    const textScreen = useRef(null);
-    const btnWebcam = useRef(null);
-    const btnScreen = useRef(null);
-    const localVideo = useRef(null);
-    const remoteVideo = useRef(null);
+    const textWebcam = useRef<HTMLParagraphElement | null>(null);;
+    const textScreen = useRef<HTMLParagraphElement | null>(null);
+    const btnWebcam = useRef<HTMLButtonElement | null>(null);
+    const btnScreen = useRef<HTMLButtonElement | null>(null);
+    const localVideo = useRef<HTMLVideoElement | null >(null);
+    const remoteVideo = useRef<HTMLVideoElement | null>(null);
 
     const connect = () => {
 
-        socket = new WebSocket('ws://localhost:5001/ws');
+        const socket = new WebSocket('ws://localhost:5001/ws');
 
-        btnScreen.current?.addEventListener('click', (e) => publish(e));
-        btnWebcam.current?.addEventListener('click', (e) => publish(e));
+        btnScreen.current?.addEventListener('click', (e) => publish(e, socket));
+        btnWebcam.current?.addEventListener('click', (e) => publish(e, socket));
 
         socket.onopen = () => {
             // start our socket request
@@ -39,7 +38,7 @@ export default function Root() {
 
         }
 
-        socket.onmessage = (event) => {
+        socket.onmessage = async (event) => {
             const msg = event.data;
 
             const jsonValidation = IsJsonString(msg);
@@ -48,14 +47,14 @@ export default function Root() {
                 return
             }
 
-            const resp: {type: string, data: any} = JSON.parse(msg);
+            const resp: {type: string, data: never} = JSON.parse(msg);
 
             switch (resp.type) {
                 case "routerCapabilities":
-                    onRouterCapabilities(resp.data);
+                    await onRouterCapabilities(resp.data);
                     break;
                 case "producerTransportCreated":
-                    onProducerTransportCreated(resp.data);
+                    await onProducerTransportCreated(resp.data, socket);
                     break;
                 case "error":
                     //Maybe change to a handle error method
@@ -85,10 +84,10 @@ export default function Root() {
         }
     }
 
-    const onProducerTransportCreated = async (resp: any) => {
+    const onProducerTransportCreated = async (resp: TransportOptions<AppData>, socket: WebSocket) => {
         transport = device.createSendTransport(resp);
 
-        transport.on('connect', async ({dtlsParameters}, callback, errback) => {
+        transport.on('connect', async ({dtlsParameters}, callback) => {
             const message = {
                 type: 'connectProducerTransport',
                 dtlsParameters
@@ -105,7 +104,7 @@ export default function Root() {
                     return
                 }
 
-                const resp: {type: string, data: any} = JSON.parse(msg);
+                const resp: {type: string, data: string} = JSON.parse(msg);
                 if(resp.type === "producerConnected") {
                     console.log(resp.data);
                     callback();
@@ -113,18 +112,20 @@ export default function Root() {
             });
         });
         // Begin Transport Producer
-        transport.on('produce', async ({kind, rtpParameters}, callback, errback) => {
+        transport.on('produce', async ({kind, rtpParameters}, callback) => {
             const message = {
                 type: 'produce',
-                transportId: transport.id,
+                transportId: transport?.id,
                 kind,
                 rtpParameters
             };
 
             const resp = JSON.stringify(message);
             socket.send(resp);
-            socket.addEventListener('published', (event) => {
-                const msg = event.data;
+
+            socket.addEventListener('message', (event) => {
+            // socket.addEventListener('published', (event) => {
+                const msg: string = event.data;
 
                 const jsonValidation = IsJsonString(msg);
                 if (!jsonValidation) {
@@ -132,9 +133,9 @@ export default function Root() {
                     return
                 }
 
-                const resp: {type: string, data: any} = JSON.parse(msg);
+                const resp: {type: string, data: { id: string }} = JSON.parse(msg);
                 console.log('published', resp);
-                callback(resp.data.id);
+                callback({id: resp.data.id});
             })
         });
         // End Transport Producer
@@ -142,15 +143,23 @@ export default function Root() {
         transport.on('connectionstatechange', (state) => {
             switch (state) {
                 case 'connecting':
-                    textPublish.innerHTML = 'publishing....'
+                    if(textPublish) {
+                        textPublish.innerHTML = 'publishing....'
+                    }
                     break;
                 case 'connected':
-                    localVideo.current.srcObject = stream;
-                    textPublish.innerHTML = 'published';
+                    if(localVideo.current) {
+                        localVideo.current.srcObject = stream ?? null;
+                    }
+                    if(textPublish) {
+                        textPublish.innerHTML = 'published';
+                    }
                     break;
                 case 'failed':
-                    transport.close();
-                    textPublish.innerHTML = 'failed';
+                    transport?.close();
+                    if(textPublish) {
+                        textPublish.innerHTML = 'failed';
+                    }
                     break;
                 default:
                     break;
@@ -163,15 +172,21 @@ export default function Root() {
             const track = stream?.getVideoTracks()[0];
             const params = { track};
 
-            producer = await transport.produce(params)
+            producer = await transport.produce(params);
+            console.log(producer);
         } catch (e) {
             console.error(e);
-            textPublish.innerHTML = 'failed!';
+            if (textPublish) {
+                textPublish.innerHTML = 'failed!';
+            } else {
+                console.error("textPublish is null");
+            }
         }
     }
 
-    const publish = (e) => {
-        isWebcam = (e.target.id == "btn_webcam");
+    const publish = (e: MouseEvent, socket: WebSocket) => {
+        const target = e.target as HTMLElement;
+        isWebcam = (target.id == "btn_webcam");
         textPublish = isWebcam ? textWebcam.current : textScreen.current;
         if(btnWebcam.current && btnScreen.current) {
             btnWebcam.current.disabled = true;
@@ -192,6 +207,7 @@ export default function Root() {
         try {
             JSON.parse(str);
         } catch (error) {
+            console.error(error);
             return false;
         }
         return true;
@@ -201,14 +217,17 @@ export default function Root() {
         try {
             device = new mediasoup.Device();
         } catch (error) {
-            if(error?.name === 'UnsupportedError') {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-expect-error
+            if(error.name === 'UnsupportedError') {
                 console.log("browser not supported")
             }
         }
         await device.load({routerRtpCapabilities})
     }
 
-    const getUserMedia = async (transport, isWebcam) => {
+    const getUserMedia = async (transport: Transport, isWebcam: boolean) => {
+        console.log(transport);
         if(!device.canProduce('video')) {
             console.error('cannot produce a video');
             return;
