@@ -1,10 +1,11 @@
 import { WebSocket, WebSocketServer } from 'ws';
-import {createWebRtcTransport, createWorker} from "@/services/mediasoup";
+import {createConsumer, createWebRtcTransport, createWorker} from "@/services/mediasoup";
 import {
+    Consumer,
     DtlsParameters,
     MediaKind,
     Producer,
-    Router,
+    Router, RtpCapabilities,
     RtpParameters,
     Transport
 } from 'mediasoup/node/lib/types';
@@ -12,8 +13,12 @@ import {
 
 const WebsocketConnection = async (wss: WebSocketServer) => {
     let mediasoupRouter: Router;
+
     let producerTransport: Transport;
     let producer: Producer;
+
+    let consumerTransport: Transport;
+    let consumer: Consumer;
 
     try {
         mediasoupRouter = await createWorker();
@@ -46,7 +51,20 @@ const WebsocketConnection = async (wss: WebSocketServer) => {
                 case 'produce':
                     onProduce(event, ws, wss);
                     break;
+                case 'createConsumerTransport':
+                    onCreateConsumerTransport(event, ws);
+                    break;
+                case 'connectConsumerTransport':
+                    onConnectConsumerTransport(event, ws);
+                    break;
+                case 'resume':
+                    onResume(ws);
+                    break;
+                case 'consume':
+                    onConsume(event, ws);
+                    break;
                 default:
+                    console.error('Unknown event type', event);
                     break;
             }
         });
@@ -84,6 +102,41 @@ const WebsocketConnection = async (wss: WebSocketServer) => {
         };
         send(ws, "produced", resp);
         broadcast(webSocket, "newProducer", "new user");
+    }
+
+    const onCreateConsumerTransport = async (event: string, ws: WebSocket) => {
+        try{
+            const { transport, params } = await createWebRtcTransport(mediasoupRouter);
+            consumerTransport = transport;
+            send(ws, "subTransportCreated", params);
+        } catch (e) {
+            console.error(e);
+            send(ws, "error", e);
+        }
+    }
+
+    const onConnectConsumerTransport = async (event: { type: string; dtlsParameters: DtlsParameters }, ws: WebSocket) => {
+        await consumerTransport.connect({dtlsParameters: event.dtlsParameters});
+        send(ws, "subConnected", 'Consumer Transport Connected!');
+    }
+
+    const onResume = async (ws: WebSocket) => {
+        await consumer.resume();
+        send(ws, "resumed", "Resumed");
+    }
+
+    const onConsume = async (
+        event: { type: string; rtpCapabilities: RtpCapabilities },
+        ws: WebSocket
+    ) => {
+        const res = await createConsumer(producer, mediasoupRouter, event.rtpCapabilities, consumerTransport);
+        if(res) {
+            let {consumer: consumerCopy, ...rest} = res;
+
+            consumer = consumerCopy;
+
+            send(ws, "subscribed", rest);
+        }
     }
 
     const IsJsonString = (str: string) => {

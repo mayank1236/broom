@@ -3,7 +3,6 @@ import { Outlet } from "react-router-dom";
 import * as mediasoup from 'mediasoup-client';
 import {useEffect, useRef} from "react";
 import {AppData, Producer, RtpCapabilities, Transport, TransportOptions} from "mediasoup-client/lib/types";
-// import WebSocket from "ws";
 
 export default function Root() {
     let isWebcam: boolean;
@@ -11,12 +10,16 @@ export default function Root() {
     let device: mediasoup.types.Device;
     let producer: Producer | undefined;
     let stream:  MediaStream | undefined;
+    let remoteStream: MediaStream | undefined;
     let transport: Transport | undefined;
+    let consumerTransport: Transport | undefined;
 
-    const textWebcam = useRef<HTMLParagraphElement | null>(null);;
+    const textSubscribe = useRef<HTMLParagraphElement>(null);
+    const textWebcam = useRef<HTMLParagraphElement | null>(null);
     const textScreen = useRef<HTMLParagraphElement | null>(null);
     const btnWebcam = useRef<HTMLButtonElement | null>(null);
     const btnScreen = useRef<HTMLButtonElement | null>(null);
+    const btnSubscribe = useRef<HTMLButtonElement | null>(null);
     const localVideo = useRef<HTMLVideoElement | null >(null);
     const remoteVideo = useRef<HTMLVideoElement | null>(null);
 
@@ -26,6 +29,7 @@ export default function Root() {
 
         btnScreen.current?.addEventListener('click', (e) => publish(e, socket));
         btnWebcam.current?.addEventListener('click', (e) => publish(e, socket));
+        btnSubscribe.current?.addEventListener('click', (e) => subscribe(e, socket));
 
         socket.onopen = () => {
             // start our socket request
@@ -55,6 +59,15 @@ export default function Root() {
                     break;
                 case "producerTransportCreated":
                     await onProducerTransportCreated(resp.data, socket);
+                    break;
+                case 'subTransportCreated':
+                    await onSubTransportCreated(resp.data, socket);
+                    break;
+                case "subscribed":
+                    await onSubscribed(resp.data);
+                    break;
+                case 'resumed':
+                    console.log(resp.data);
                     break;
                 case "error":
                     //Maybe change to a handle error method
@@ -184,6 +197,106 @@ export default function Root() {
         }
     }
 
+    const onSubTransportCreated = async (resp: TransportOptions<AppData>, socket: WebSocket) => {
+        consumerTransport = device.createRecvTransport(resp);
+        consumerTransport.on('connect', async ({dtlsParameters}, callback) => {
+            const msg = {
+                type: 'connectConsumerTransport',
+                transportId: transport?.id,
+                dtlsParameters
+            };
+            const message = JSON.stringify(msg);
+            socket.send(message);
+
+            socket.addEventListener('message', (event) => {
+                const msg = event.data;
+
+                const jsonValidation = IsJsonString(msg);
+                if (!jsonValidation) {
+                    console.error("json error");
+                    return
+                }
+
+                const resp: {type: string, data: string} = JSON.parse(msg);
+                if(resp.type === "subConnected") {
+                    console.log(resp.data);
+                    callback();
+                }
+            });
+        });
+
+        consumerTransport.on('connectionstatechange', async (state) => {
+            switch (state) {
+                case 'connecting':
+                    if(textSubscribe.current)
+                        textSubscribe.current.innerHTML = 'Subscribing...';
+                    break;
+                case 'connected': {
+                    if (remoteVideo.current) {
+                        remoteVideo.current.srcObject = remoteStream ?? null;
+                    }
+                    const msg = {
+                        type: 'resume'
+                    };
+                    const message = JSON.stringify(msg);
+                    socket.send(message);
+                    if(textSubscribe.current)
+                        textSubscribe.current.innerHTML = 'Subscribed!';
+                    break;
+                }
+                case 'failed':
+                    consumerTransport?.close();
+                    if(textSubscribe.current)
+                        textSubscribe.current.innerHTML = 'Failed!';
+                    if(btnSubscribe.current)
+                        btnSubscribe.current.disabled = false;
+                    break;
+                default:
+                    console.error('No case created for state:', state);
+                    break;
+            }
+        });
+
+         await consume(consumerTransport, socket);
+    }
+
+    const onSubscribed = async (resp: any) => {
+        const {
+            producerId,
+            id,
+            kind,
+            rtpParameters
+        } = resp;
+
+        const codecOptions = {
+
+        };
+        const consumer = await consumerTransport?.consume({
+            id,
+            producerId,
+            kind,
+            rtpParameters,
+            codecOptions
+        });
+
+        const stream = new MediaStream();
+        if(consumer) {
+            stream.addTrack(consumer.track)
+            remoteStream = stream;
+        };
+    }
+
+    const consume = async (_transport: Transport, socket: WebSocket) => {
+        const {rtpCapabilities} = device;
+        const msg = {
+            type: 'consume',
+            rtpCapabilities
+        };
+
+        const message = JSON.stringify(msg);
+        socket.send(message);
+    }
+
     const publish = (e: MouseEvent, socket: WebSocket) => {
         const target = e.target as HTMLElement;
         isWebcam = (target.id == "btn_webcam");
@@ -201,6 +314,19 @@ export default function Root() {
 
         const resp = JSON.stringify(message);
         socket.send(resp);
+    }
+
+    const subscribe = (_e: MouseEvent, socket: WebSocket) => {
+        if(btnSubscribe.current) {
+            btnSubscribe.current.disabled = true;
+        }
+        const msg = {
+            type: 'createConsumerTransport',
+            forceTcp: false,
+        }
+
+        const message = JSON.stringify(msg);
+        socket.send(message);
     }
 
     const IsJsonString = (str: string) => {
@@ -226,8 +352,7 @@ export default function Root() {
         await device.load({routerRtpCapabilities})
     }
 
-    const getUserMedia = async (transport: Transport, isWebcam: boolean) => {
-        console.log(transport);
+    const getUserMedia = async (_transport: Transport, isWebcam: boolean) => {
         if(!device.canProduce('video')) {
             console.error('cannot produce a video');
             return;
@@ -251,24 +376,33 @@ export default function Root() {
                     <video className="w-full" ref={remoteVideo} autoPlay controls></video>
                 </div>
                 <button
-                  disabled
-                  className="btn_webcam p-3 bg-black text-white border border-black hover:text-black hover:bg-white disabled:bg-gray-400 disabled:border-gray-400 disabled:text-white"
-                  id="btn_webcam"
-                  ref={btnWebcam}
-                >Webcam</button>
+                    disabled
+                    className=" p-3 bg-black text-white border border-black hover:text-black hover:bg-white disabled:bg-gray-400 disabled:border-gray-400 disabled:text-white"
+                    id="btn_webcam"
+                    ref={btnWebcam}
+                >Webcam
+                </button>
                 <button
-                  disabled
-                  className="btn_screen p-3 bg-black text-white border border-black hover:text-black hover:bg-white disabled:bg-gray-400 disabled:border-gray-400 disabled:text-white"
-                  id="btn_screen"
-                  ref={btnScreen}
-                >Screen</button>
+                    disabled
+                    className=" p-3 bg-black text-white border border-black hover:text-black hover:bg-white disabled:bg-gray-400 disabled:border-gray-400 disabled:text-white"
+                    id="btn_screen"
+                    ref={btnScreen}
+                >Screen
+                </button>
+                <button
+                    className=" p-3 bg-black text-white border border-black hover:text-black hover:bg-white disabled:bg-gray-400 disabled:border-gray-400 disabled:text-white"
+                    id="btn_subscribe"
+                    ref={btnSubscribe}
+                >Subscribe
+                </button>
                 <p ref={textScreen}></p>
                 <p ref={textWebcam}></p>
+                <p ref={textSubscribe}></p>
             </main>
             <div id="detail">
-                <Outlet />
+                <Outlet/>
             </div>
         </>
     );
-  }
+}
   
