@@ -2,7 +2,14 @@
 import { Outlet } from "react-router-dom";
 import * as mediasoup from 'mediasoup-client';
 import {useEffect, useRef} from "react";
-import {AppData, Producer, RtpCapabilities, Transport, TransportOptions} from "mediasoup-client/lib/types";
+import {
+    AppData,
+    Producer,
+    RtpCapabilities,
+    RtpParameters,
+    Transport,
+    TransportOptions
+} from "mediasoup-client/lib/types";
 
 export default function Root() {
     let isWebcam: boolean;
@@ -77,12 +84,6 @@ export default function Root() {
                     break;
             }
         }
-
-        // socket.onclose = () => {
-        //     console.error('websocket closed');
-        //     transport?.close();
-        // }
-
     }
 
     useEffect(() => {
@@ -260,7 +261,9 @@ export default function Root() {
          await consume(consumerTransport, socket);
     }
 
-    const onSubscribed = async (resp: any) => {
+    const onSubscribed = async (
+        resp: {producerId: string; id: string; kind: "audio" | "video"; rtpParameters: RtpParameters}
+    ) => {
         const {
             producerId,
             id,
@@ -268,15 +271,15 @@ export default function Root() {
             rtpParameters
         } = resp;
 
-        const codecOptions = {
-
-        };
+        // const codecOptions = {
+        //
+        // };
         const consumer = await consumerTransport?.consume({
             id,
             producerId,
             kind,
             rtpParameters,
-            codecOptions
+            // codecOptions
         });
 
         const stream = new MediaStream();
